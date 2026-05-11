@@ -1,54 +1,87 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-# ========================
-# Fail2Ban 一键安装脚本（SSH防护）
-# ========================
+echo "[*] 安装 Fail2ban（简易稳定版）"
 
-echo "===> 开始安装 Fail2Ban..."
-
-# 判断系统类型
-if [ -f /etc/debian_version ]; then
-    echo "检测到 Debian/Ubuntu"
-    apt update -y
-    apt install -y fail2ban
-    LOGPATH="/var/log/auth.log"
-elif [ -f /etc/redhat-release ]; then
-    echo "检测到 CentOS/RHEL"
-    yum install -y epel-release
-    yum install -y fail2ban
-    LOGPATH="/var/log/secure"
-else
-    echo "不支持的系统"
-    exit 1
+if [[ "$EUID" -ne 0 ]]; then
+  echo "[!] 请用 root 运行"
+  exit 1
 fi
 
-# 备份旧配置
-[ -f /etc/fail2ban/jail.local ] && cp /etc/fail2ban/jail.local /etc/fail2ban/jail.local.bak
+# ========= 安装 =========
+if [[ -f /etc/debian_version ]]; then
+  apt update -y
+  apt install -y fail2ban python3-systemd || apt install -y fail2ban
+elif [[ -f /etc/redhat-release ]]; then
+  if command -v dnf >/dev/null 2>&1; then
+    dnf install -y epel-release
+    dnf install -y fail2ban
+  else
+    yum install -y epel-release
+    yum install -y fail2ban
+  fi
+else
+  echo "[!] 不支持的系统"
+  exit 1
+fi
 
-echo "===> 生成配置文件..."
+# ========= 创建配置目录 =========
+mkdir -p /etc/fail2ban/jail.d
 
-cat > /etc/fail2ban/jail.local <<EOF
+# ========= 自动判断日志来源 =========
+LOGPATH=""
+USE_SYSTEMD="false"
 
-[DEFAULT]
-ignoreip = 127.0.0.1/8 ::1
-bantime = 24h
-findtime = 10m
-maxretry = 5
+if [[ -f /var/log/auth.log ]]; then
+  LOGPATH="/var/log/auth.log"
+elif [[ -f /var/log/secure ]]; then
+  LOGPATH="/var/log/secure"
+else
+  USE_SYSTEMD="true"
+fi
 
+echo "[*] 检测日志方式: $([[ $USE_SYSTEMD == true ]] && echo "systemd" || echo "$LOGPATH")"
+
+# ========= 写入配置 =========
+if [[ "$USE_SYSTEMD" == "true" ]]; then
+  cat > /etc/fail2ban/jail.d/sshd.local <<EOF
 [sshd]
 enabled = true
-port    = ssh
-logpath = $LOGPATH
-backend = auto
-filter  = sshd
+port = ssh
+backend = systemd
+EOF
+else
+  cat > /etc/fail2ban/jail.d/sshd.local <<EOF
+[sshd]
+enabled = true
+port = ssh
+logpath = ${LOGPATH}
+EOF
+fi
+
+# ========= 全局简单策略 =========
+cat > /etc/fail2ban/jail.d/00-simple.local <<EOF
+[DEFAULT]
+findtime = 10m
+maxretry = 5
+bantime = 10h
+ignoreip = 127.0.0.1/8 ::1
 EOF
 
-echo "===> 启动 fail2ban..."
+# ========= 启动 =========
+echo "[*] 校验配置..."
+if fail2ban-client -t >/dev/null 2>&1; then
+  systemctl enable fail2ban
+  systemctl restart fail2ban
+  echo "[*] 启动成功"
+else
+  echo "[!] 配置错误，请检查 /etc/fail2ban/jail.d/"
+  exit 1
+fi
 
-systemctl enable fail2ban
-systemctl restart fail2ban
-
-echo "===> 安装完成 ✅"
-
+echo
+echo "✅ 完成！"
+echo
 echo "查看状态："
-echo "fail2ban-client status sshd"
+echo "  fail2ban-client status"
+echo "  fail2ban-client status sshd"
