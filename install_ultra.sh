@@ -14,7 +14,7 @@ fi
 # ==============================
 FINDTIME="10m"         # 统计窗口
 MAXRETRY="3"           # 失败次数阈值（比简易版更严格）
-BANTIME="1h"           # 首次封禁时长
+BANTIME="10h"           # 首次封禁时长
 SSHD_MODE="aggressive" # normal / aggressive（更敏感）
 
 # 递增封禁（repeat offender）
@@ -27,7 +27,7 @@ INCR_RNDTIME="10m"     # 随机扰动，防止对方卡点[1](https://visei.com/
 RECIDIVE_ENABLE="true"
 RECIDIVE_FINDTIME="1d"
 RECIDIVE_MAXRETRY="5"
-RECIDIVE_BANTIME="7d"  # 惯犯封 7 天（可改更狠/更保守）[6](https://blog.exsvc.cn/article/fail2ban-block-recidive.html)
+RECIDIVE_BANTIME="30d"  # 惯犯封 7 天（可改更狠/更保守）[6](https://blog.exsvc.cn/article/fail2ban-block-recidive.html)
 
 # 自动白名单当前 SSH 客户端 IP（降低误封把自己锁死）
 CLIENT_IP=""
